@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd 'c:\\\\Dropbox\\\\mydoki\\\\SmartInternetRadio\\\\internetRadio2' ; powershell -NoProfile -Command \"Get-ChildItem -Path \\$env:USERPROFILE\\\\\\.platformio\\\\packages\\\\framework-arduinoespressif32\\\\libraries\\\\Network\\\\src\\\\\\* -Force \\| Select-Object Name,FullName; Get-ChildItem -Path \\$env:USERPROFILE\\\\\\.platformio\\\\packages\\\\framework-arduinoespressif32\\\\libraries\\\\FS\\\\src\\\\\\* -Force \\| Select-Object Name,FullName\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

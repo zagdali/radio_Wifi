@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ESP32 Radio</title>
+<style>
+  :root {
+    --bg1: #f6f0e3;
+    --bg2: #dce8df;
+    --panel: rgba(255, 255, 255, 0.78);
+    --ink: #1b262c;
+    --muted: #59656a;
+    --accent: #b14f28;
+    --accent2: #244b57;
+    --danger: #923b31;
+    --danger-bg: #e8a59e;
+    --line: rgba(27, 38, 44, 0.12);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, var(--bg1), var(--bg2));
+    color: var(--ink);
+  }
+
+  body {
+    line-height: 1.5;
+  }
+
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  h1 {
+    margin: 0 0 8px;
+    font-size: 38px;
+    letter-spacing: .02em;
+    line-height: 1;
+  }
+
+  p.lead {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 18px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
+    min-width: 0;
+  }
+
+  h2 {
+    margin: 0 0 14px;
+    font-size: 22px;
+  }
+
+  .station {
+    display: block;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .station.active {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .station h3 {
+    margin: 0 0 2px;
+    font-size: 16px;
+    overflow-wrap: break-word;
+    line-height: 1.2;
+  }
+
+  .muted {
+    color: var(--muted);
+    font-size: 11px;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .nav-row,
+  .station-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .station-actions {
+    margin-top: 6px;
+  }
+
+  .station-actions button {
+    min-width: 0;
+  }
+
+  .station-actions .btn-fav {
+    width: 38px;
+    font-size: 18px;
+    line-height: 1;
+    padding: 8px 10px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--accent);
+  }
+
+  .station-actions .btn-play {
+    flex: 4 1 0;
+    min-width: 0;
+  }
+
+  .station-actions .btn-delete {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .status {
+    display: block;
+    gap: 8px;
+    margin-bottom: 18px;
+    width: 100%;
+  }
+
+  .mini-status {
+    margin: 12px 0 20px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    width: 100%;
+  }
+
+  .status-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px dashed var(--line);
+    padding-bottom: 8px;
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+
+  .status-line:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .status-line span {
+    color: var(--muted);
+    min-width: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .status-line strong {
+    text-align: right;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .controls {
+    margin-bottom: 18px;
+    gap: 10px;
+  }
+
+  .controls button {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .form {
+    display: block;
+    gap: 10px;
+    margin-bottom: 18px;
+    width: 100%;
+  }
+
+  input,
+  select,
+  button {
+    font: inherit;
+  }
+
+  input[type="text"],
+  input[type="url"],
+  input[type="password"],
+  select {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.88);
+  }
+
+  input[type="range"] {
+    width: 100%;
+  }
+
+  button {
+    border: 0;
+    border-radius: 12px;
+    padding: 8px 12px;
+    color: #fff;
+    cursor: pointer;
+    background: var(--accent2);
+  }
+
+  button.secondary {
+    background: var(--accent);
+  }
+
+  button.danger {
+    background: var(--danger);
+  }
+
+  button.ghost {
+    background: #6b7d83;
+  }
+
+  .note {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 6px;
+  }
+
+  textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Слайдер подтверждения удаления */
+  .slide-confirm {
+    position: relative;
+    width: 100%;
+    height: 36px;
+    background: var(--danger-bg);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-top: 6px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .slide-confirm input[type="range"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .slide-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: var(--danger);
+    border-radius: 18px;
+    transition: width 0.1s;
+    z-index: 1;
+  }
+
+  .slide-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    z-index: 0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+
+  .slide-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 32px;
+    height: 32px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--danger);
+    font-size: 14px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 1;
+    transition: left 0.1s;
+  }
+
+  .slide-thumb::after {
+    content: '✕';
+  }
+
+  @media (max-width: 820px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+
+    body {
+      font-size: 12px;
+    }
+
+    .wrap {
+      padding: 6px;
+    }
+
+    .card {
+      padding: 10px;
+      border-radius: 12px;
+    }
+
+    h1 {
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+
+    h2 {
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .station h3 {
+      font-size: 13px;
+    }
+
+    .station {
+      padding: 8px 10px;
+    }
+
+    input,
+    select,
+    button {
+      font-size: 12px;
+      padding: 6px 8px;
+    }
+
+    .row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .controls {
+      gap: 6px;
+    }
+
+    .status,
+    .controls,
+    .form {
+      margin-bottom: 10px;
+    }
+
+    .status-line {
+      padding-bottom: 5px;
+    }
+
+    .status-line span {
+      font-size: 13px;
+    }
+
+    .status-line strong {
+      font-size: 15px;
+    }
+
+    .mini-status {
+      margin: 8px 0 10px;
+      padding: 8px 10px;
+    }
+
+    .volume-control {
+      display: grid;
+      gap: 6px;
+    }
+
+    .volume-display {
+      font-size: 14px;
+      color: #222;
+      text-align: right;
+    }
+
+    textarea {
+      min-height: 120px !important;
+    }
+  }
+</style>
+</head>
+
+<body>
+  <div class="wrap">
+
+    <section class="grid">
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom: 12px;">
+          <h2 style="margin:0;">Станции</h2>
+          <button class="btn-fav" style="font-size:18px; padding:6px 10px;" onclick="toggleShowFavorites()" id="favoriteFilterBtn">☆</button>
+        </div>
+        <div class="controls nav-row">
+          <button onclick="prevStation()">Prev</button>
+          <button onclick="nextStation()">Next</button>
+        </div>
+        <div class="status mini-status" id="statusPanel"></div>
+        <h2>Громкость</h2>
+        <div class="form">
+          <div class="volume-control">
+            <input id="volume" type="range" min="0" max="100" value="50"
+              oninput="onVolumeInput(this)"
+              onmousedown="startVolumeAdjust()"
+              ontouchstart="startVolumeAdjust()"
+              onfocus="startVolumeAdjust()"
+              onblur="endVolumeAdjust()">
+            <div class="volume-display">Текущая громкость: <strong id="currentVolumeValue">50</strong></div>
+          </div>
+          <div class="row">
+            <button onclick="setVolume()">Применить</button>
+          </div>
+        </div>
+        <div id="stations"></div>
+      </div>
+
+      <div class="card">
+        <h2>Состояние</h2>
+        <div class="status" id="status"></div>
+
+        <h2>Добавить станцию</h2>
+        <div class="form">
+          <input id="name" type="text" placeholder="Название">
+          <input id="url" type="url" placeholder="URL потока">
+          <button class="secondary" onclick="addStation()">Добавить</button>
+        </div>
+
+        <div>
+          <h2>Import M3U</h2>
+
+          <input id="m3uFile" type="file" accept=".m3u,.m3u8,text/plain,audio/x-mpegurl,application/x-mpegurl">
+
+          <div class="row">
+            <button onclick="importM3UFile()">Upload file</button>
+          </div>
+
+          <textarea id="m3u" placeholder="Or paste M3U content here"
+            style="width:100%;min-height:220px;box-sizing:border-box;padding:10px;border-radius:8px;"></textarea>
+
+          <div class="row">
+            <button onclick="importM3U()">Import pasted text</button>
+          </div>
+
+          <div id="importResult" class="muted"></div>
+        </div>
+
+        <h2>Настройка Wi‑Fi</h2>
+        <div class="form">
+          <select id="wifiList"></select>
+          <input id="wifiSsid" type="text" placeholder="SSID">
+          <input id="wifiPass" type="password" placeholder="Пароль">
+          <div class="row">
+            <button onclick="scanWifi()">Сканировать сети</button>
+            <button class="secondary" onclick="saveWifi()">Сохранить Wi‑Fi</button>
+          </div>
+          <div class="note" id="wifiNote">После сохранения устройство перезагрузится.</div>
+        </div>
+
+        <h2>Обновление прошивки</h2>
+        <form method="POST" action="/update" enctype="multipart/form-data">
+          <input type="file" name="update">
+          <div class="row" style="margin-top:10px;">
+            <button type="submit">Загрузить OTA</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    async function jsonFetch(url, options) {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || ('HTTP ' + res.status));
+      }
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) return res.json();
+      return res.text();
+    }
+
+    async function importM3U() {
+      const text = document.getElementById('m3u').value.trim();
+      const resultEl = document.getElementById('importResult');
+
+      if (!text) {
+        resultEl.textContent = 'Paste M3U content first';
+        return;
+      }
+
+      const res = await fetch('/api/import-m3u', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: text
+      });
+
+      const data = await res.json();
+
+      resultEl.textContent =
+        `Added: ${data.added}, duplicates: ${data.duplicates}, invalid: ${data.invalid}, total: ${data.total}`;
+
+      loadState();
+    }
+
+    function loadStations() {
+      return loadState();
+    }
+
+    async function importM3UFile() {
+      const input = document.getElementById('m3uFile');
+      const resultEl = document.getElementById('importResult');
+
+      if (!input.files || !input.files.length) {
+        resultEl.textContent = 'Select a .m3u file first';
+        return;
+      }
+
+      const file = input.files[0];
+
+      try {
+        const text = await file.text();
+
+        if (!text.trim()) {
+          resultEl.textContent = 'Selected file is empty';
+          return;
+        }
+
+        const res = await fetch('/api/import-m3u', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: text
+        });
+
+        const data = await res.json();
+
+        resultEl.textContent =
+          `Added: ${data.added}, duplicates: ${data.duplicates}, invalid: ${data.invalid}, total: ${data.total}`;
+
+        input.value = '';
+        loadState();
+      } catch (err) {
+        resultEl.textContent = 'Failed to read or upload file';
+      }
+    }
+
+    // Хранилище слайдеров по индексам станций
+    const slideStates = {};
+    let showFavoritesOnly = false;
+
+    function updateFavoriteFilterButton() {
+      const btn = document.getElementById('favoriteFilterBtn');
+      if (btn) {
+        btn.textContent = showFavoritesOnly ? '★' : '☆';
+      }
+    }
+
+    function renderStationActions(container, index, favorite = false) {
+      const star = favorite ? '★' : '☆';
+      container.innerHTML = `
+        <button class="btn-fav" onclick="toggleFavorite(${index}, ${favorite})">${star}</button>
+        <button class="btn-play" onclick="playStation(${index})">Играть</button>
+        <button class="btn-delete danger" onclick="showDeleteSlide(${index}, this)">Удалить</button>
+      `;
+    }
+
+    function showDeleteSlide(index, btnEl) {
+      const actionsRow = btnEl.parentElement;
+      const favoriteButton = actionsRow.querySelector('.btn-fav');
+      const currentFavorite = favoriteButton ? favoriteButton.textContent.trim() === '★' : false;
+      const slideId = 'slide-' + index;
+
+      actionsRow.innerHTML = `
+        <div class="slide-confirm" id="${slideId}">
+          <div class="slide-fill" id="${slideId}-fill"></div>
+          <div class="slide-label">СДВИНЬТЕ ДЛЯ УДАЛЕНИЯ →</div>
+          <div class="slide-thumb" id="${slideId}-thumb"></div>
+          <input type="range" min="0" max="100" value="0"
+                 oninput="onSlideMove(${index}, this.value)"
+                 onmouseup="onSlideEnd(${index}, this)"
+                 ontouchend="onSlideEnd(${index}, this)"
+                 onchange="onSlideEnd(${index}, this)">
+        </div>
+      `;
+
+      slideStates[index] = { confirmed: false, favorite: currentFavorite };
+    }
+
+    function onSlideMove(index, value) {
+      const fill = document.getElementById('slide-' + index + '-fill');
+      const thumb = document.getElementById('slide-' + index + '-thumb');
+      if (!fill || !thumb) return;
+
+      const v = Number(value);
+      fill.style.width = v + '%';
+      // Ползунок движется от 2px до (100% - 34px)
+      const trackWidth = fill.parentElement.offsetWidth;
+      const maxLeft = trackWidth - 34;
+      thumb.style.left = (2 + (v / 100) * maxLeft) + 'px';
+
+      if (v >= 90) {
+        slideStates[index].confirmed = true;
+      } else {
+        slideStates[index].confirmed = false;
+      }
+    }
+
+    function onSlideEnd(index, input) {
+      if (slideStates[index] && slideStates[index].confirmed) {
+        deleteStation(index);
+      } else {
+        // Возврат — перерисовываем кнопки
+        const st = document.getElementById('stations');
+        const stationEl = st.children[index];
+        if (stationEl) {
+          const actionsRow = stationEl.querySelector('.station-actions');
+          if (actionsRow) {
+            renderStationActions(actionsRow, index);
+          }
+        }
+      }
+      delete slideStates[index];
+    }
+
+    let volumeSliderActive = false;
+    let pendingVolumeValue = null;
+
+    function startVolumeAdjust() {
+      volumeSliderActive = true;
+    }
+
+    function endVolumeAdjust() {
+      volumeSliderActive = false;
+      pendingVolumeValue = null;
+    }
+
+    function onVolumeInput(input) {
+      const value = input.value;
+      document.getElementById('currentVolumeValue').textContent = value;
+      pendingVolumeValue = value;
+    }
+
+    async function loadState() {
+      const state = await jsonFetch('/api/state');
+      const stations = await jsonFetch('/api/stations');
+
+      const st = document.getElementById('status');
+      const statusPanel = document.getElementById('statusPanel');
+      const statusHtml = `
+        <div class="status-line"><span>Станция</span><strong>${state.stationName}</strong></div>
+        <div class="status-line"><span>Трек</span><strong>${state.track || '-'}</strong></div>
+        <div class="status-line"><span>Статус</span><strong>${state.playStatus}</strong></div>
+        <div class="status-line"><span>Кодек</span><strong>${state.codec || '-'}</strong></div>
+        <div class="status-line"><span>Битрейт</span><strong>${state.audioBitrate || '-'}</strong></div>
+        <div class="status-line"><span>Громкость</span><strong>${state.volume}</strong></div>
+      `;
+      statusPanel.innerHTML = statusHtml;
+
+      st.innerHTML = `
+        <div class="status-line"><span>Wi‑Fi</span><strong>${state.wifiConnected ? 'connected' : 'ap mode'}</strong></div>
+        <div class="status-line"><span>IP</span><strong>${state.ip}</strong></div>
+        <div class="status-line"><span>RSSI</span><strong>${state.rssi}</strong></div>
+        ${statusHtml}
+        <div class="status-line"><span>Сеть сохранена</span><strong>${state.savedSsid || '-'}</strong></div>
+      `;
+
+      if (!volumeSliderActive) {
+        document.getElementById('volume').value = state.volume;
+        document.getElementById('currentVolumeValue').textContent = state.volume;
+      }
+      document.getElementById('wifiSsid').value = state.savedSsid || '';
+
+      const box = document.getElementById('stations');
+      box.innerHTML = '';
+      stations.forEach((item, index) => {
+        if (showFavoritesOnly && !item.favorite) {
+          return;
+        }
+
+        const el = document.createElement('div');
+        el.className = 'station' + (index === state.stationIndex ? ' active' : '');
+        el.innerHTML = `
+          <h3>${item.name}</h3>
+          <div class="muted">${item.url}</div>
+          <div class="station-actions" id="actions-${index}"></div>
+        `;
+        box.appendChild(el);
+
+        const actionsRow = el.querySelector('.station-actions');
+        if (slideStates[index] && !slideStates[index].confirmed) {
+          showDeleteSlide(index, actionsRow);
+        } else {
+          renderStationActions(actionsRow, index, item.favorite);
+        }
+      });
+      updateFavoriteFilterButton();
+    }
+
+    async function playStation(index) {
+      await jsonFetch('/api/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index })
+      });
+      loadState();
+    }
+
+    async function toggleFavorite(index, favorite) {
+      await jsonFetch('/api/stations/favorite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index, favorite: !favorite })
+      });
+      loadState();
+    }
+
+    function toggleShowFavorites() {
+      showFavoritesOnly = !showFavoritesOnly;
+      updateFavoriteFilterButton();
+      loadState();
+    }
+
+    async function nextStation() {
+      await jsonFetch('/api/next', { method: 'POST' });
+      loadState();
+    }
+
+    async function prevStation() {
+      await jsonFetch('/api/prev', { method: 'POST' });
+      loadState();
+    }
+
+    async function setVolume() {
+      const volume = Number(document.getElementById('volume').value);
+      await jsonFetch('/api/volume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ volume })
+      });
+      pendingVolumeValue = null;
+      volumeSliderActive = false;
+      sliderTouched = false;
+      await loadState();
+    }
+
+    async function addStation() {
+      const name = document.getElementById('name').value.trim();
+      const url = document.getElementById('url').value.trim();
+      if (!name || !url) return;
+
+      await jsonFetch('/api/stations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, url })
+      });
+
+      document.getElementById('name').value = '';
+      document.getElementById('url').value = '';
+      loadState();
+    }
+
+    async function deleteStation(index) {
+      await jsonFetch('/api/stations', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index })
+      });
+      loadState();
+    }
+
+    async function scanWifi() {
+      try {
+        const data = await jsonFetch('/api/wifi/scan');
+        const sel = document.getElementById('wifiList');
+        sel.innerHTML = '';
+
+        // server may return an array or an object { networks: [...] }
+        const networks = Array.isArray(data) ? data : (data.networks || []);
+
+        networks.forEach(net => {
+          const opt = document.createElement('option');
+          opt.value = net.ssid;
+          opt.textContent = `${net.ssid} (${net.rssi} dBm) ${net.open ? '[open]' : ''}`;
+          sel.appendChild(opt);
+        });
+
+        sel.onchange = () => {
+          document.getElementById('wifiSsid').value = sel.value;
+        };
+        if (networks.length > 0) {
+          document.getElementById('wifiSsid').value = networks[0].ssid;
+        }
+      } catch (err) {
+        const note = document.getElementById('wifiNote');
+        if (note) note.textContent = 'Wi‑Fi scan failed: ' + (err && err.message ? err.message : String(err));
+      }
+    }
+
+    async function saveWifi() {
+      const ssid = document.getElementById('wifiSsid').value.trim();
+      const pass = document.getElementById('wifiPass').value;
+      if (!ssid) return;
+
+      document.getElementById('wifiNote').textContent = 'Сохраняю и перезагружаю устройство...';
+
+      await fetch('/api/wifi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid, pass })
+      });
+
+      document.getElementById('wifiNote').textContent = 'Сохранено. Подождите перезагрузку и откройте устройство снова.';
+    }
+
+    loadState();
+    setInterval(loadState, 4000);
+  </script>
+</body>
+
+</html>
