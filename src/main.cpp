@@ -6,6 +6,7 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <DNSServer.h>
+#include <ESPmDNS.h>
 #include <U8g2lib.h>
 #include <Wire.h>
 #include <vector>
@@ -27,6 +28,7 @@ static const char *AP_SSID = "ESP32-Wifi-Setup";
 static const char *AP_PASS = "12345678";
 static const char *DEFAULT_WIFI_SSID = "555";
 static const char *DEFAULT_WIFI_PASS = "141367141367";
+static const char *HOSTNAME = "Radio";
 
 static const uint8_t PIN_I2S_BCLK = 4;
 static const uint8_t PIN_I2S_LRCK = 5;
@@ -39,17 +41,28 @@ static const uint8_t OLED_ADDR = 0x3C;
 static const char *FILE_STATIONS = "/stations.json";
 static const char *FILE_WIFI = "/wifi.json";
 
-static const uint32_t DISPLAY_REFRESH_MS = 250;
+static const uint32_t DISPLAY_REFRESH_MS = 750;
 static const uint32_t STATION_OVERLAY_MS = 2000;
 static const uint32_t VOLUME_OVERLAY_MS = 1500;
-static const uint32_t AUDIO_RECONNECT_MS = 5000;
+static const uint32_t AUDIO_RECONNECT_MS = 1000;
 static const uint32_t WIFI_CONNECT_TIMEOUT_MS = 5000;
+static const uint32_t STATION_RECONNECT_MS = 5000;
+static const uint32_t AUDIO_STALL_TIMEOUT_MS = 12000;
+static const uint32_t AUDIO_BUFFER_LOW_WATERMARK = 4096;
+static const uint32_t AUDIO_WATCHDOG_SAMPLE_MS = 1000;
+static const uint32_t WIFI_RECONNECT_RETRY_MS = 5000;
 static const uint8_t WIFI_CONNECT_RETRIES = 5;
 
 Preferences prefs;
 WebServer server(80);
 DNSServer dns;
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+
+void stopCurrentStation();
+void playCurrentStation();
+void stopAudio();
+void audioSetVolume(int vol);
+void saveRuntimePrefs();
 
 std::vector<Station> stations;
 Audio audio;
@@ -60,6 +73,8 @@ int currentStation = 0;
 int volumeValue = 50;
 bool wifiConnected = false;
 bool apMode = false;
+bool autoStationReconnect = false;
+unsigned long stationReconnectNextAt = 0;
 String playStatus = "STOPPED";
 String currentTrack = "";
 
@@ -67,6 +82,8 @@ unsigned long volumeOverlayUntil = 0;
 unsigned long stationOverlayUntil = 0;
 unsigned long lastDisplayRefresh = 0;
 unsigned long reconnectAudioAt = 0;
+static bool mdnsStarted = false;
+static String connectedWifiSsid = "";
 
 // line1 cycling and scrolling state
 unsigned long line1SwitchAt = 0;
@@ -87,26 +104,31 @@ enum ScreenMode
 
 ScreenMode screenMode = SCREEN_BOOT;
 
+// Wi-Fi reconnect state must be declared before startApMode()/connectWifi().
+static uint8_t wifiReconnectAttempt = 0;
+static unsigned long wifiReconnectNextAt = 0;
+static bool wifiReconnecting = false;
+
+// Audio stream watchdog. Wi-Fi can remain associated while the WAN/Internet
+// connection is down. In that case WiFi.status() stays WL_CONNECTED and the
+// normal Wi-Fi-loss handler cannot detect the failure.
+static unsigned long audioWatchdogSampleAt = 0;
+static unsigned long audioLastBufferProgressAt = 0;
+static uint32_t audioLastBufferFilled = 0;
+static bool audioWatchdogArmed = false;
+
 void updateDisplay();
+void startApMode();
+void startMdns();
+void stopMdns();
+void clearWifiReconnectState();
+void wifiReconnectTick();
+void audioReconnectTick();
+void audioWatchdogTick();
 
-void playCurrentStation();
-
-String sanitizeText(const char *s)
-{
-  if (!s)
-    return "";
-  String out = s;
-  out.replace("\n", " ");
-  out.replace("\r", " ");
-  out.trim();
-  return out;
-}
-
-String toLowerCopy(String s)
-{
-  s.toLowerCase();
-  return s;
-}
+void stopAudio(bool clearReconnect);
+void stopAudio();
+void stopAudio() { stopAudio(true); }
 
 // =====================================================
 // ESP32-audioI2S AUDIO ENGINE
@@ -234,6 +256,12 @@ bool audioPlayUrl(const String &url)
   currentTrack = "";
   audioBitrate = "";
 
+  // Reset the stream watchdog for every new connection attempt.
+  audioWatchdogArmed = false;
+  audioWatchdogSampleAt = millis();
+  audioLastBufferProgressAt = millis();
+  audioLastBufferFilled = 0;
+
   playStatus = "CONNECTING";
 
   audio.stopSong();
@@ -256,7 +284,7 @@ bool audioPlayUrl(const String &url)
   return true;
 }
 
-void stopAudio(bool clearReconnect = true)
+void stopAudio(bool clearReconnect)
 {
   audio.stopSong();
 
@@ -264,6 +292,11 @@ void stopAudio(bool clearReconnect = true)
 
   currentTrack = "";
   audioBitrate = "";
+
+  audioWatchdogArmed = false;
+  audioWatchdogSampleAt = 0;
+  audioLastBufferProgressAt = 0;
+  audioLastBufferFilled = 0;
 
   if (clearReconnect)
   {
@@ -278,18 +311,100 @@ bool audioIsRunning()
 
 void audioLoop()
 {
+  // In AP mode there is no station playback.
   if (apMode)
     return;
 
   audio.loop();
 
-  if (!audio.isRunning())
+  if (!audio.isRunning() && autoStationReconnect && reconnectAudioAt == 0)
   {
-    if (playStatus == "PLAYING")
+    // The audio library can stop the stream without sending EOF.
+    // Arm the reconnect timer only once; do not restart the timer on every loop.
+    if (playStatus == "PLAYING" || playStatus == "RECONNECT")
     {
-      playStatus = "STOPPED";
+      playStatus = "RECONNECT";
       scheduleReconnect();
     }
+  }
+}
+
+void audioWatchdogTick()
+{
+  if (!autoStationReconnect || apMode || !wifiConnected || stations.empty())
+    return;
+
+  if (!audio.isRunning())
+    return;
+
+  unsigned long now = millis();
+
+  if (audioWatchdogSampleAt != 0 &&
+      (unsigned long)(now - audioWatchdogSampleAt) < AUDIO_WATCHDOG_SAMPLE_MS)
+    return;
+
+  audioWatchdogSampleAt = now;
+
+  uint32_t filled = audio.inBufferFilled();
+
+  if (!audioWatchdogArmed)
+  {
+    audioWatchdogArmed = true;
+    audioLastBufferFilled = filled;
+    audioLastBufferProgressAt = now;
+    return;
+  }
+
+  // A growing or comfortably filled buffer means the network stream is alive.
+  if (filled > audioLastBufferFilled ||
+      filled >= AUDIO_BUFFER_LOW_WATERMARK)
+  {
+    audioLastBufferProgressAt = now;
+  }
+
+  audioLastBufferFilled = filled;
+
+  // Important: Wi-Fi may still report WL_CONNECTED while the Internet or
+  // radio server is unreachable. In that situation Audio::isRunning() can
+  // remain true, so the old isRunning()-only reconnect logic never fired.
+  // Force a clean reconnect after a prolonged empty/stalled input buffer.
+  if (filled < AUDIO_BUFFER_LOW_WATERMARK &&
+      (unsigned long)(now - audioLastBufferProgressAt) >= AUDIO_STALL_TIMEOUT_MS)
+  {
+    Serial.printf(
+        "Audio watchdog: stream stalled (buffer=%u bytes), restarting station\n",
+        (unsigned)filled);
+
+    audioWatchdogArmed = false;
+    audioLastBufferProgressAt = now;
+    audioLastBufferFilled = 0;
+
+    playStatus = "RECONNECT";
+    audio.stopSong();
+
+    reconnectAudioAt = now + 500;
+    stationReconnectNextAt = now + STATION_RECONNECT_MS;
+  }
+}
+
+void audioReconnectTick()
+{
+  if (!autoStationReconnect || apMode || !wifiConnected || stations.empty())
+    return;
+
+  if (reconnectAudioAt == 0)
+    return;
+
+  unsigned long now = millis();
+  if ((long)(now - reconnectAudioAt) < 0)
+    return;
+
+  reconnectAudioAt = 0;
+
+  if (!audio.isRunning())
+  {
+    Serial.println("Audio reconnect...");
+    playCurrentStation();
   }
 }
 
@@ -504,8 +619,10 @@ void drawMainScreen()
     float progress = (float)elapsed / (float)line1Durations[1];
     int maxOffset = textW - availW;
     int xOffset = (int)(progress * maxOffset + 0.5);
-    if (xOffset < 0) xOffset = 0;
-    if (xOffset > maxOffset) xOffset = maxOffset;
+    if (xOffset < 0)
+      xOffset = 0;
+    if (xOffset > maxOffset)
+      xOffset = maxOffset;
     // draw shifted text with negative x to clip instead of wrapping
     u8g2.drawUTF8(-xOffset, 13, line1Text.c_str());
   }
@@ -544,9 +661,11 @@ void drawMainScreen()
   u8g2.drawUTF8(0, 44, statusLine.c_str());
 
   // line4: codec + bitrate
-  String codecLine = String(audio.getCodecname());
+  String codecLine = audio.isRunning() ? String(audio.getCodecname()) : "";
   if (!audioBitrate.isEmpty())
     codecLine += " " + audioBitrate;
+  if (codecLine.isEmpty())
+    codecLine = playStatus;
   u8g2.drawUTF8(0, 58, codecLine.c_str());
 }
 
@@ -570,22 +689,22 @@ void drawVolumeOverlay()
 
 void drawStationOverlay()
 {
-    // Заголовок
-    u8g2.setFont(u8g2_font_7x13_tf);
+  // Заголовок
+  u8g2.setFont(u8g2_font_7x13_tf);
 
-    const char *title = "CONNECTING...";
-    int x = (128 - u8g2.getUTF8Width(title)) / 2;
-    u8g2.drawUTF8(x, 14, title);
+  const char *title = "CONNECTING...";
+  int x = (128 - u8g2.getUTF8Width(title)) / 2;
+  u8g2.drawUTF8(x, 14, title);
 
-    // Название станции
-    String stationName = getStationName();
+  // Название станции
+  String stationName = getStationName();
 
-    u8g2.setFont(u8g2_font_8x13_tf);
-    drawWrapped(stationName, 2, 36, 124, 13);
+  u8g2.setFont(u8g2_font_8x13_tf);
+  drawWrapped(stationName, 2, 36, 124, 13);
 
-    // Статус
-    u8g2.setFont(u8g2_font_6x12_tf);
-    u8g2.drawUTF8(2, 60, playStatus.c_str());
+  // Статус
+  u8g2.setFont(u8g2_font_6x12_tf);
+  u8g2.drawUTF8(2, 60, playStatus.c_str());
 }
 
 void updateDisplay()
@@ -633,67 +752,77 @@ void updateDisplay()
   u8g2.sendBuffer();
 }
 
+void stopMdns()
+{
+  if (mdnsStarted)
+  {
+    MDNS.end();
+    mdnsStarted = false;
+  }
+}
+
+void startMdns()
+{
+  stopMdns();
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    if (MDNS.begin(HOSTNAME))
+    {
+      MDNS.addService("http", "tcp", 80);
+      mdnsStarted = true;
+      Serial.printf("mDNS started: http://%s.local/\n", HOSTNAME);
+    }
+    else
+    {
+      Serial.println("mDNS start failed");
+    }
+  }
+}
+
+void clearWifiReconnectState()
+{
+  wifiReconnecting = false;
+  wifiReconnectAttempt = 0;
+  wifiReconnectNextAt = 0;
+}
+
 void startApMode()
 {
+  clearWifiReconnectState();
+  stopMdns();
+  stopAudio();
+
   apMode = true;
   wifiConnected = false;
+  connectedWifiSsid = "";
   playStatus = "AP MODE";
   screenMode = SCREEN_MAIN;
 
-  stopAudio();
-
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(AP_SSID, AP_PASS);
-  dns.start(53, "*", WiFi.softAPIP());
-}
-
-bool connectToWifiCredentials(const String &ssid, const String &pass, unsigned long timeoutMs)
-{
-  if (ssid.isEmpty())
-    return false;
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), pass.c_str());
-
-  wifiSsid = ssid;
-  wifiPass = pass;
-  playStatus = "WIFI CONNECT";
-
-  Serial.printf("Connecting to WiFi SSID: %s\n", ssid.c_str());
-
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs)
-  {
-    delay(250);
-    screenMode = SCREEN_BOOT;
-    updateDisplay();
-  }
-
-  bool connected = WiFi.status() == WL_CONNECTED;
-  if (connected)
-  {
-    wifiConnected = true;
-    apMode = false;
-    wifiSsid = ssid;
-    wifiPass = pass;
-    playStatus = "WIFI OK";
-    screenMode = SCREEN_MAIN;
-    Serial.println("WiFi connected");
-    Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
-    updateDisplay();
-    return true;
-  }
-
-  Serial.printf("WiFi connect failed for SSID: %s\n", ssid.c_str());
-  WiFi.disconnect(true, true);
+  WiFi.softAPdisconnect(true);
   delay(100);
-  return false;
+
+  if (!WiFi.softAP(AP_SSID, AP_PASS))
+  {
+    Serial.println("ERROR: failed to start AP");
+  }
+  else
+  {
+    Serial.printf("AP started: %s, IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
+  }
+
+  dns.stop();
+  dns.start(53, "*", WiFi.softAPIP());
 }
 
 bool connectWifi()
 {
-  wifiConnected = false;
+  clearWifiReconnectState();
+  stopMdns();
+  dns.stop();
   apMode = false;
+  wifiConnected = false;
 
   String savedSsid;
   String savedPass;
@@ -706,40 +835,62 @@ bool connectWifi()
   auto tryConnect = [&](const String &ssid, const String &pass) -> bool
   {
     if (ssid.isEmpty())
-    {
       return false;
-    }
 
-    for (uint8_t attempt = 1; attempt <= WIFI_CONNECT_RETRIES; attempt++)
+    for (uint8_t attempt = 1; attempt <= WIFI_CONNECT_RETRIES; ++attempt)
     {
       Serial.printf("WiFi connect attempt %u/%u to SSID: %s\n",
                     attempt, WIFI_CONNECT_RETRIES, ssid.c_str());
 
-      WiFi.disconnect(true, true);
-      delay(300);
+      WiFi.mode(WIFI_STA);
+      WiFi.setHostname(HOSTNAME);
+      WiFi.disconnect(false, false);
+      delay(100);
+      WiFi.begin(ssid.c_str(), pass.c_str());
 
-      if (connectToWifiCredentials(ssid, pass, WIFI_CONNECT_TIMEOUT_MS))
+      unsigned long connectStart = millis();
+      while (WiFi.status() != WL_CONNECTED &&
+             millis() - connectStart < WIFI_CONNECT_TIMEOUT_MS)
       {
+        delay(50);
+      }
+
+      if (WiFi.status() == WL_CONNECTED)
+      {
+        wifiSsid = ssid;
+        wifiPass = pass;
+        connectedWifiSsid = ssid;
+        wifiConnected = true;
+        apMode = false;
+        clearWifiReconnectState();
+        dns.stop();
+        startMdns();
+
+        // Persist credentials that actually worked (including fallback).
+        saveWifiConfig(ssid, pass);
+
+        Serial.printf("WiFi connected to %s, IP: %s, RSSI: %d dBm\n",
+                      ssid.c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
         return true;
       }
 
-      delay(700);
+      Serial.printf("WiFi connect failed for %s (status=%d)\n",
+                    ssid.c_str(), (int)WiFi.status());
+      WiFi.disconnect(false, false);
+      delay(300);
     }
 
     return false;
   };
 
   if (tryConnect(savedSsid, savedPass))
-  {
     return true;
-  }
 
-  if (savedSsid != DEFAULT_WIFI_SSID)
+  if (savedSsid != DEFAULT_WIFI_SSID || savedPass != DEFAULT_WIFI_PASS)
   {
+    Serial.println("Saved WiFi credentials failed, trying default fallback SSID");
     if (tryConnect(DEFAULT_WIFI_SSID, DEFAULT_WIFI_PASS))
-    {
       return true;
-    }
   }
 
   return false;
@@ -792,6 +943,8 @@ void playCurrentStation()
 
   currentTrack = "";
   playStatus = "CONNECTING";
+  autoStationReconnect = true;
+  stationReconnectNextAt = millis() + STATION_RECONNECT_MS;
   screenMode = SCREEN_STATION;
   stationOverlayUntil = millis() + STATION_OVERLAY_MS;
   reconnectAudioAt = 0;
@@ -801,6 +954,9 @@ void playCurrentStation()
     playStatus = "CONNECT FAIL";
     scheduleReconnect();
   }
+  Serial.printf("Heap      %u\n", ESP.getFreeHeap());
+  Serial.printf("Largest   %u\n", ESP.getMaxAllocHeap());
+  Serial.printf("PSRAM     %u\n", ESP.getFreePsram());
 
   saveRuntimePrefs();
 }
@@ -810,6 +966,31 @@ void stopCurrentStation()
   stopAudio();
   currentTrack = "";
   playStatus = "STOPPED";
+  autoStationReconnect = false;
+  stationReconnectNextAt = 0;
+}
+void stationReconnectTick()
+{
+  if (!autoStationReconnect || apMode || !wifiConnected || stations.empty())
+    return;
+
+  // Keep a slow safety retry for cases where the audio library does not report
+  // a clean EOF/stop event. Normal reconnects are handled by audioReconnectTick().
+  unsigned long now = millis();
+  if ((long)(now - stationReconnectNextAt) < 0)
+    return;
+
+  stationReconnectNextAt = now + STATION_RECONNECT_MS;
+
+  if (!audio.isRunning() &&
+      (playStatus == "CONNECT FAIL" ||
+       playStatus == "RECONNECT" ||
+       playStatus == "BUFFERING" ||
+       playStatus == "CONNECTING"))
+  {
+    Serial.println("Station safety reconnect");
+    playCurrentStation();
+  }
 }
 
 String contentType(const String &path)
@@ -1011,7 +1192,7 @@ doc["rssi"] =
 
 
 if(!stations.empty() &&
-   currentStation < stations.size())
+   currentStation < (int)stations.size())
 {
  doc["stationName"]=stations[currentStation].name;
 }
@@ -1050,8 +1231,7 @@ doc["savedSsid"] = wifiSsid;
     }
     String out;
     serializeJson(doc, out);
-    sendJson(200, out);
-  });
+    sendJson(200, out); });
 
   server.on("/api/next", HTTP_POST, [sendJson]()
             {
@@ -1059,7 +1239,7 @@ doc["savedSsid"] = wifiSsid;
       currentStation = (currentStation + 1) % stations.size();
       playCurrentStation();
     }
-    sendJson(200, "{\"ok\":true}"); });
+    sendJson(200, R"({"ok":true})"); });
 
   server.on("/api/prev", HTTP_POST, [sendJson]()
             {
@@ -1067,12 +1247,30 @@ doc["savedSsid"] = wifiSsid;
       currentStation = (currentStation - 1 + stations.size()) % stations.size();
       playCurrentStation();
     }
-    sendJson(200, "{\"ok\":true}"); });
+    sendJson(200, R"({"ok":true})"); });
 
   server.on("/api/stop", HTTP_POST, [sendJson]()
             {
     stopCurrentStation();
-    sendJson(200, "{\"ok\":true}"); });
+    sendJson(200, R"({"ok":true})"); });
+
+  server.on("/api/play", HTTP_POST, [sendJson]()
+            {
+    JsonDocument doc;
+    if (deserializeJson(doc, server.arg("plain")) != DeserializationError::Ok) {
+      sendJson(400, "{\"error\":\"bad json\"}");
+      return;
+    }
+
+    int idx = doc["index"] | 0;
+    if (idx < 0 || idx >= (int)stations.size()) {
+      sendJson(400, "{\"error\":\"bad index\"}");
+      return;
+    }
+
+    currentStation = idx;
+    playCurrentStation();
+    sendJson(200, R"({"ok":true})"); });
 
   server.on("/api/volume", HTTP_POST, [sendJson]()
             {
@@ -1085,7 +1283,7 @@ doc["savedSsid"] = wifiSsid;
     int v = doc["volume"] | 50;
     audioSetVolume(v);
     saveRuntimePrefs();
-    sendJson(200, "{\"ok\":true}"); });
+    sendJson(200, R"({"ok":true})"); });
 
   server.on("/api/stations", HTTP_POST, [sendJson]()
             {
@@ -1105,9 +1303,19 @@ doc["savedSsid"] = wifiSsid;
       return;
     }
 
+    if (!isHttpStreamUrl(url)) {
+      sendJson(400, "{\"error\":\"URL must start with http:// or https://\"}");
+      return;
+    }
+
+    if (stationUrlExists(url)) {
+      sendJson(409, "{\"error\":\"station already exists\"}");
+      return;
+    }
+
     stations.push_back({name, url, false});
     saveStations();
-    sendJson(200, "{\"ok\":true}"); });
+    sendJson(200, R"({"ok":true})"); });
 
   server.on("/api/stations/favorite", HTTP_POST, [sendJson]()
             {
@@ -1127,7 +1335,50 @@ doc["savedSsid"] = wifiSsid;
 
     stations[idx].favorite = favorite;
     saveStations();
-    sendJson(200, "{\"ok\":true}"); });
+    sendJson(200, R"({"ok":true})"); });
+
+  server.on("/api/stations/move", HTTP_POST, [sendJson]()
+            {
+    JsonDocument doc;
+    if (deserializeJson(doc, server.arg("plain")) != DeserializationError::Ok) {
+      sendJson(400, "{\"error\":\"bad json\"}");
+      return;
+    }
+
+    int idx = doc["index"] | -1;
+    String dir = doc["direction"] | "";
+
+    if (idx < 0 || idx >= (int)stations.size()) {
+      sendJson(400, "{\"error\":\"bad index\"}");
+      return;
+    }
+
+    int targetIdx = idx;
+    if (dir == "up") {
+      targetIdx = idx - 1;
+    } else if (dir == "down") {
+      targetIdx = idx + 1;
+    } else {
+      sendJson(400, "{\"error\":\"bad direction\"}");
+      return;
+    }
+
+    if (targetIdx >= 0 && targetIdx < (int)stations.size()) {
+      bool currentWasSelected = (currentStation == idx);
+      bool targetWasSelected = (currentStation == targetIdx);
+
+      std::swap(stations[idx], stations[targetIdx]);
+
+      if (currentWasSelected) {
+        currentStation = targetIdx;
+      } else if (targetWasSelected) {
+        currentStation = idx;
+      }
+
+      saveStations();
+      saveRuntimePrefs();
+    }
+    sendJson(200, R"({"ok":true})"); });
 
   server.on("/api/stations", HTTP_DELETE, [sendJson]()
             {
@@ -1188,9 +1439,10 @@ doc["savedSsid"] = wifiSsid;
     serializeJson(doc, out);
     sendJson(200, out); });
 
-  server.on("/api/wifi/scan", HTTP_GET, [sendJson]() {
+  server.on("/api/wifi/scan", HTTP_GET, [sendJson]()
+            {
     server.sendHeader("Access-Control-Allow-Origin", "*");
-    DynamicJsonDocument doc(4096);
+    JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
 
     int8_t n = WiFi.scanNetworks();
@@ -1209,7 +1461,7 @@ doc["savedSsid"] = wifiSsid;
     }
 
     for (int i = 0; i < n; ++i) {
-      JsonObject o = arr.createNestedObject();
+      JsonObject o = arr.add<JsonObject>();
       o["ssid"] = WiFi.SSID(i);
       o["rssi"] = WiFi.RSSI(i);
       o["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
@@ -1217,8 +1469,8 @@ doc["savedSsid"] = wifiSsid;
 
     String out;
     serializeJson(doc, out);
-    sendJson(200, out);
-  });
+    WiFi.scanDelete();
+    sendJson(200, out); });
 
   server.on("/wifi", HTTP_POST, []()
             {
@@ -1228,7 +1480,7 @@ doc["savedSsid"] = wifiSsid;
 
     // Try parse JSON body first (client posts JSON)
     if (server.hasArg("plain") && server.arg("plain").length() > 0) {
-      DynamicJsonDocument doc(1024);
+      JsonDocument doc;
       if (deserializeJson(doc, server.arg("plain")) == DeserializationError::Ok) {
         ssid = String((const char*) (doc["ssid"] | ""));
         pass = String((const char*) (doc["pass"] | ""));
@@ -1252,11 +1504,12 @@ doc["savedSsid"] = wifiSsid;
     server.send(200, "text/plain", "Saved. Reboot device."); });
 
   // API-compatible JSON endpoint: /api/wifi
-  server.on("/api/wifi", HTTP_POST, [sendJson]() {
+  server.on("/api/wifi", HTTP_POST, [sendJson]()
+            {
     JsonDocument resp;
 
     if (server.hasArg("plain") && server.arg("plain").length() > 0) {
-      DynamicJsonDocument doc(1024);
+      JsonDocument doc;
       if (deserializeJson(doc, server.arg("plain")) != DeserializationError::Ok) {
         sendJson(400, "{\"error\":\"bad json\"}");
         return;
@@ -1283,8 +1536,7 @@ doc["savedSsid"] = wifiSsid;
       return;
     }
 
-    sendJson(400, "{\"error\":\"empty body\"}");
-  });
+    sendJson(400, "{\"error\":\"empty body\"}"); });
 
   server.on("/update", HTTP_POST, []()
             {
@@ -1326,9 +1578,16 @@ void setup()
 
   if (!LittleFS.begin(true))
   {
-    while (true)
+    Serial.println("ERROR: LittleFS mount failed, attempting format...");
+    LittleFS.format();
+    if (!LittleFS.begin())
     {
-      delay(1000);
+      Serial.println("FATAL: LittleFS unrecoverable, entering AP-only mode");
+      // Continue anyway — at least AP mode will work
+    }
+    else
+    {
+      Serial.println("LittleFS formatted and mounted successfully");
     }
   }
 
@@ -1342,34 +1601,35 @@ void setup()
 
   audioInit();
 
-  Audio::audio_info_callback = [](Audio::msg_t m) {
+  Audio::audio_info_callback = [](Audio::msg_t m)
+  {
     switch (m.e)
     {
-      case Audio::evt_info:
-        audio_info(m.msg);
-        break;
-      case Audio::evt_name:
-        audio_showstation(m.msg);
-        break;
-      case Audio::evt_streamtitle:
-        audio_showstreamtitle(m.msg);
-        break;
-      case Audio::evt_bitrate:
-        audio_bitrate(m.msg);
-        break;
-      case Audio::evt_eof:
-        audio_eof_mp3(m.msg);
-        break;
-      case Audio::evt_id3data:
-        audio_id3data(m.msg);
-        break;
-      case Audio::evt_log:
-        if (m.msg)
-          Serial.printf("[AUDIO LOG] %s\n", m.msg);
-        break;
-      default:
-        audio_info(m.msg);
-        break;
+    case Audio::evt_info:
+      audio_info(m.msg);
+      break;
+    case Audio::evt_name:
+      audio_showstation(m.msg);
+      break;
+    case Audio::evt_streamtitle:
+      audio_showstreamtitle(m.msg);
+      break;
+    case Audio::evt_bitrate:
+      audio_bitrate(m.msg);
+      break;
+    case Audio::evt_eof:
+      audio_eof_mp3(m.msg);
+      break;
+    case Audio::evt_id3data:
+      audio_id3data(m.msg);
+      break;
+    case Audio::evt_log:
+      if (m.msg)
+        Serial.printf("[AUDIO LOG] %s\n", m.msg);
+      break;
+    default:
+      audio_info(m.msg);
+      break;
     }
   };
 
@@ -1393,115 +1653,95 @@ void setup()
   }
 }
 
-static uint8_t wifiReconnectAttempt = 0;
-static unsigned long wifiReconnectNextAt = 0;
-static bool wifiReconnecting = false;
-
 void wifiReconnectTick()
 {
   if (!wifiReconnecting)
     return;
 
   unsigned long now = millis();
-  if (reconnectAudioAt &&
-      now > reconnectAudioAt)
-  {
-    reconnectAudioAt = 0;
-
-    if (wifiConnected && !stations.empty())
-    {
-      Serial.println("Audio reconnect...");
-      playCurrentStation();
-    }
-  }
-
-  if (now < wifiReconnectNextAt)
-  {
+  if ((long)(now - wifiReconnectNextAt) < 0)
     return;
-  }
 
   if (WiFi.status() == WL_CONNECTED)
   {
     wifiConnected = true;
-    wifiReconnecting = false;
-    wifiReconnectAttempt = 0;
     apMode = false;
+    connectedWifiSsid = wifiSsid;
+    clearWifiReconnectState();
+    dns.stop();
+    startMdns();
 
     playStatus = "WIFI OK";
     screenMode = SCREEN_MAIN;
+    Serial.printf("WiFi reconnected, IP: %s, RSSI: %d dBm\n",
+                  WiFi.localIP().toString().c_str(), WiFi.RSSI());
 
-    Serial.println("WiFi reconnected");
-
-    playCurrentStation();
+    if (!stations.empty())
+      playCurrentStation();
     return;
   }
 
+  // A temporary Internet outage must not force the radio into setup/AP mode.
+  // Keep retrying the saved Wi-Fi credentials indefinitely. The initial boot
+  // connection still falls back to AP mode in setup().
   if (wifiReconnectAttempt >= WIFI_CONNECT_RETRIES)
-  {
-    Serial.println("WiFi reconnect failed");
+    wifiReconnectAttempt = 0;
 
-    wifiReconnecting = false;
-    startApMode();
-    return;
-  }
-
-  wifiReconnectAttempt++;
-
-  Serial.printf(
-      "WiFi reconnect %u/%u\n",
-      wifiReconnectAttempt,
-      WIFI_CONNECT_RETRIES);
-
-  WiFi.disconnect(true, true);
-
-  delay(100);
+  ++wifiReconnectAttempt;
+  Serial.printf("WiFi reconnect %u/%u\n",
+                wifiReconnectAttempt, WIFI_CONNECT_RETRIES);
 
   WiFi.mode(WIFI_STA);
+  WiFi.setHostname(HOSTNAME);
+  WiFi.disconnect(false, false);
+  delay(50);
+  if (wifiSsid.isEmpty())
+  {
+    wifiSsid = DEFAULT_WIFI_SSID;
+    wifiPass = DEFAULT_WIFI_PASS;
+  }
 
-  WiFi.begin(
-      wifiSsid.c_str(),
-      wifiPass.c_str());
+  WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
 
-  wifiReconnectNextAt =
-      now + WIFI_CONNECT_TIMEOUT_MS;
+  // Do not hammer the access point while it is unavailable.
+  wifiReconnectNextAt = now + WIFI_RECONNECT_RETRY_MS;
 }
 
 void loop()
 {
   server.handleClient();
-  audioLoop();
 
   if (apMode)
-  {
     dns.processNextRequest();
-  }
+
+  audioLoop();
+  audioWatchdogTick();
+  audioReconnectTick();
+
+  if (wifiReconnecting)
+    wifiReconnectTick();
+
+  stationReconnectTick();
 
   unsigned long now = millis();
 
-  if (wifiReconnecting)
-  {
-    wifiReconnectTick();
-  }
-
-  if (screenMode == SCREEN_VOLUME && now > volumeOverlayUntil)
-  {
+  if (screenMode == SCREEN_VOLUME && (long)(now - volumeOverlayUntil) >= 0)
     screenMode = SCREEN_MAIN;
-  }
 
-  if (screenMode == SCREEN_STATION && now > stationOverlayUntil)
-  {
+  if (screenMode == SCREEN_STATION && (long)(now - stationOverlayUntil) >= 0)
     screenMode = SCREEN_MAIN;
-  }
 
-  if (now - lastDisplayRefresh > DISPLAY_REFRESH_MS)
+  if (now - lastDisplayRefresh >= DISPLAY_REFRESH_MS)
   {
     lastDisplayRefresh = now;
     updateDisplay();
   }
 
-  if (wifiConnected && WiFi.status() != WL_CONNECTED)
+  // Do not interfere with AP mode or an already running reconnect attempt.
+  if (!apMode && !wifiReconnecting && wifiConnected && WiFi.status() != WL_CONNECTED)
   {
     wifiConnected = false;
+    connectedWifiSsid = "";
     playStatus = "WIFI LOST";
     currentTrack = "";
     screenMode = SCREEN_MAIN;
@@ -1509,6 +1749,7 @@ void loop()
 
     wifiReconnecting = true;
     wifiReconnectAttempt = 0;
-    wifiReconnectNextAt = millis() + 500;
+    wifiReconnectNextAt = millis() + 300;
+    stopMdns();
   }
 }

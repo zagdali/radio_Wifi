@@ -450,8 +450,8 @@ class Audio {
 
   public:
     struct audioSettings {
-        uint16_t DMA_DESC_NUM = 32;                // number of I2S DMA buffer
-        uint16_t DMA_FRAME_NUM = 256;              // number of frames in one DMA buffer
+        uint16_t DMA_DESC_NUM = 64;                // number of I2S DMA buffer
+        uint16_t DMA_FRAME_NUM = 512;              // number of frames in one DMA buffer
         uint16_t FREQ_LS_HZ = 500;                 // IIR Filter, lowshelf
         uint16_t FREQ_PEAK_HZ = 1800;              // IIR Filter, peakingEQ
         uint16_t FREQ_HS_HZ = 6000;                // IIR Filter, highshelf

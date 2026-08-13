@@ -48,20 +48,20 @@
         "url": "https://icecast-vgtrk.cdnvideo.ru/capitalfmmp3"
     },
     {
-        "name": "romantika",
-        "url": "https://hls-01-gpm.hostingradio.ru/romantika495/playlist.m3u8"
+        "name": "Radio Romantika",
+        "url": "http://23.105.238.4/romantika32.aacp"
     },
     {
-        "name": "7",
-        "url": "https://hls-01-regions.emgsound.ru/13_msk/playlist.m3u8"
+        "name": "Radio 7 na semi holmakh",
+        "url": "https://radio7.hostingradio.ru:8040/radio7256.mp3"
     },
     {
-        "name": "Best",
-        "url": "https://nashe1.hostingradio.ru/best-128.mp3"
+        "name": "Best FM",
+        "url": "http://nashe1.hostingradio.ru/best-256"
     },
     {
-        "name": "radiorecord",
-        "url": "https://hls-01-radiorecord.hostingradio.ru/record/playlist.m3u8"
+        "name": "Radio Record",
+        "url": "https://radiorecord.hostingradio.ru/rr_main96.aacp"
     },
     {
         "name": "HIT104 - Your Top 40 Channel - 128 kbit/s",
@@ -77,15 +77,25 @@
     },
     {
         "name": "Maximum",
-        "url": "https://maximum.hostingradio.ru/maximum128.mp3"
+        "url": "https://maximum.hostingradio.ru/maximum96.aacp"
     },
     {
         "name": "Ultra",
-        "url": "https://nashe3.hostingradio.ru/ultra-128.mp3.m3u"
+        "url": "http://nashe2.hostingradio.ru:80/ultra-128.mp3"
     },
     {
-        "name": "montecarlo",
-        "url": "https://rusradio.hostingradio.ru/montecarlo128.mp3"
+        "name": "Radio Monte Carlo",
+        "url": "http://montecarlo.hostingradio.ru/montecarlo96.aacp"
+    },
+    {
+        "name": "Radio Monte Carlo Gold Collection",
+        "url": "http://montecarlo.hostingradio.ru/mcgold96.aacp"
+    },    {
+        "name": "Radio Monte Carlo Love",
+        "url": "http://montecarlo.hostingradio.ru/pesniolyubvi96.aacp"
+    },    {
+        "name": "Radio Monte Carlo Golf Club",
+        "url": "http://montecarlo.hostingradio.ru/golfcup96.aacp"
     },
     {
         "name": "danubius_HiFi",
@@ -96,7 +106,7 @@
         "url": "https://s2.audiostream.hu/bdpstrock_FLAC"
     },
     {
-        "name": "",
+        "name": "Europa Plus",
         "url": "http://ep256.hostingradio.ru:8052/europaplus256.mp3"
     },
     {
@@ -104,20 +114,12 @@
         "url": "https://pub0101.101.ru:8443/stream/air/aac/64/200"
     },
     {
-        "name": "Energy",
-        "url": "https://hls-01-gpm.hostingradio.ru/energyfm495/playlist.m3u8"
-    },
-    {
-        "name": "Centaury te resguarda",
-        "url": "https://icecast.centaury.cl:5980/radiopurochile1/icecast.audio"
-    },
-    {
-        "name": "hitfm",
+        "name": "Hit FM",
         "url": "https://rusradio.hostingradio.ru/hitfm128.mp3"
     },
     {
-        "name": "fm",
-        "url": "http://choco.hostingradio.ru:10010/fm.m3u"
+        "name": "Radio Shokolad",
+        "url": "http://choco.hostingradio.ru:10010/fm"
     },
     {
         "name": "Naim Radio",
@@ -129,7 +131,7 @@
     },
     {
         "name": "Radio 2.0 - Bergamo in aria HD (Italy) FLAC",
-        "url": "http://vps.radioduepuntozero.it:8000/stream.ogg.m3u"
+        "url": "http://vps.radioduepuntozero.it:8000/stream.ogg"
     },
     {
         "name": "Intense Radio _ Electronic Dance Music FLAC",
@@ -137,11 +139,7 @@
     },
     {
         "name": "The Cheese (In FLAC)",
-        "url": "http://thecheese.ddns.net:8004/stream.m3u"
-    },
-    {
-        "name": "SuperStereo 5 _ Adult and South American 80s and 90s rock FLAC",
-        "url": "http://198.204.228.202:8643/flac5"
+        "url": "https://station.thecheese.co.nz/listen/the_cheese/flac"
     },
     {
         "name": "Frequence 3 Dance _ House and Dance FLAC",
@@ -157,7 +155,7 @@
     },
     {
         "name": "Dance Wave _ Dance, Electronic FLAC",
-        "url": "https://dancewave.online/dance.flac.ogg.m3u"
+        "url": "http://dancewave.online/dance.flac.ogg"
     },
     {
         "name": "Hi Online",
@@ -172,28 +170,8 @@
         "url": "http://mscp2.live-streams.nl:8100/flac.flac"
     },
     {
-        "name": "Extagy.NET",
-        "url": "http://148.63.106.91:80/"
-    },
-    {
-        "name": "Madison Beer - BOYSHIT",
-        "url": "http://stream.laut.fm/radiosummernight"
-    },
-    {
-        "name": "Easy FM",
-        "url": "http://94.228.133.5:8000/;"
-    },
-    {
         "name": "SECTOR _ 90s Next FLAC",
         "url": "http://89.223.45.5:8000/next-flac"
-    },
-    {
-        "name": "(#1 - 12187/8000) Joy Hits",
-        "url": "http://51.210.241.217:8880/joyhits.mp3"
-    },
-    {
-        "name": "(#1 - 61/256) Friss FM Kisvarda",
-        "url": "http://109.105.0.50:10050/"
     },
     {
         "name": "ELDORADIO",
@@ -204,15 +182,11 @@
         "url": "http://amp.cesnet.cz:8000/cro-radio-wave.flac"
     },
     {
-        "name": "------------  ANTENNE BAYERN ------------",
-        "url": "C:\\Users\\User\\Desktop\\\\Radio Caprice:----------- ANTENNE BAYERN ------------"
-    },
-    {
         "name": "Frequence 3  Touraine",
         "url": "https://frequence3.net-radio.fr/frequence3-fm37.mp3"
     },
     {
-        "name": "Copyright & Song Williamson - He Is (Alaia & Gallo Remix)",
+        "name": "Frequence 3 Dance AAC",
         "url": "https://frequence3.net-radio.fr/frequence3dance.aac"
     },
     {
@@ -360,19 +334,11 @@
         "url": "https://stream.antenne.de/80er-kulthits/stream/aacp"
     },
     {
-        "name": "------------  Country ------------",
-        "url": "C:\\Users\\User\\Desktop\\\\Radio Caprice:----------- Country ------------"
-    },
-    {
-        "name": "Mitchell Tenpenny - Truth About You",
-        "url": "http://138.201.234.215:10238/stream"
-    },
-    {
         "name": "Radio Paradise _ Mellow Mix : Mellow Rock",
         "url": "http://stream.radioparadise.com/mellow-flac"
     },
     {
-        "name": "(#1 - 8/9999) DI Radio Digital impulse  - Country",
+        "name": "DI Radio Digital impulse  - Country",
         "url": "http://148.251.43.231:8110/stream"
     },
     {
@@ -381,7 +347,7 @@
     },
     {
         "name": "Radio 2.0 : Valli di Bergamo (Italy) local FLAC",
-        "url": "http://vps.radioduepuntozero.it:8000/stream.ogg.m3u"
+        "url": "http://vps.radioduepuntozero.it:8000/stream.ogg"
     },
     {
         "name": "Rela America Independent Radio Station",
@@ -416,7 +382,7 @@
         "url": "https://138.68.159.186:8000/blastfmcountry"
     },
     {
-        "name": "(#1 - 0/5000) SGU-Radio",
+        "name": "SGU-Radio",
         "url": "https://138.68.159.186:8000/sgu-radio"
     },
     {
@@ -440,20 +406,12 @@
         "url": "http://streams.95bfm.com/stream112"
     },
     {
-        "name": "Frequence 3 World _ World Music",
-        "url": "https://frequence3.net-radio.fr/frequence3world.flac"
-    },
-    {
-        "name": "(#2 - 71/999) TNT Radio 1",
+        "name": "TNT Radio 1",
         "url": "http://149.56.175.167:5457/stream"
     },
     {
         "name": "POP radio son live",
         "url": "http://89.33.243.3:8000/"
-    },
-    {
-        "name": "------------  House Trance ------------",
-        "url": "C:\\Users\\User\\Desktop\\\\Radio Caprice:----------- House Trance ------------"
     },
     {
         "name": "Intense Radio : Electronic Dance Music Flac",
@@ -476,7 +434,7 @@
         "url": "http://anubis.discovertrance.com:80/stream"
     },
     {
-        "name": "(#1 - 95/512) Dogglounge Deep House Radio",
+        "name": "Dogglounge Deep House Radio",
         "url": "https://dogglounge.com:8000/"
     },
     {
@@ -484,7 +442,7 @@
         "url": "http://51.89.195.240:8034/stream"
     },
     {
-        "name": "(#1 - 41/5000) ClubMix Radio Romania",
+        "name": "ClubMix Radio Romania",
         "url": "https://live.radioclubmix.ro:9999/"
     },
     {
@@ -524,7 +482,7 @@
         "url": "http://radiohost.riddimdub.com:8000/radio.mp3"
     },
     {
-        "name": "Nautic Radio - Beats 'n Breaks - drum and bass,jungle,dubstep,breakcore,frenchcore,tekno,experimental,hiphop,disco,hardcore",
+        "name": "Nautic Radio - Beats 'n Breaks",
         "url": "http://83.137.145.141:14280/"
     },
     {
@@ -544,19 +502,11 @@
         "url": "http://94.130.242.5:8024/stream"
     },
     {
-        "name": "------------  Rock Metal ------------",
-        "url": "C:\\Users\\User\\Desktop\\\\Radio Caprice:----------- Rock Metal ------------"
-    },
-    {
-        "name": "Who - Squeeze Box",
-        "url": "http://192.99.170.8:5096/stream"
-    },
-    {
-        "name": "(#1 - 69/500) Rock Melodic Radio - AOR MELODIC ROCK HARD ROCK",
+        "name": "Rock Melodic Radio - AOR MELODIC ROCK HARD ROCK",
         "url": "https://i4.streams.ovh:8124/stream"
     },
     {
-        "name": "(#1 - 99/500) CLASSIC METAL RADIO (classicmetalradio.net)",
+        "name": "CLASSIC METAL RADIO (classicmetalradio.net)",
         "url": "http://hazel.torontocast.com:2280/"
     },
     {
@@ -564,47 +514,47 @@
         "url": "http://185.33.21.112:80/highvoltage_128"
     },
     {
-        "name": "(#1 - 66/400) Metal Rock Radio",
+        "name": "Metal Rock Radio",
         "url": "https://kathy.torontocast.com:2800/"
     },
     {
-        "name": "(#1 - 10/1000) MIX ROCK METAL RADIO",
+        "name": "MIX ROCK METAL RADIO",
         "url": "http://87.98.216.129:4198"
     },
     {
-        "name": "(#1 - 9/200) BOLLOCKS Rock & Metal Radio",
+        "name": "BOLLOCKS Rock & Metal Radio",
         "url": "http://91.121.178.222:6588"
     },
     {
-        "name": "(#1 - 5/9999) The Metal Plague",
+        "name": "The Metal Plague",
         "url": "http://46.4.40.246:8386/stream"
     },
     {
-        "name": "(#1 - 1/512) RADIO DRACHENBLUT CH",
+        "name": "RADIO DRACHENBLUT CH",
         "url": "http://82.195.251.219:9000/stream/8/"
     },
     {
-        "name": "(#1 - 13/100) Blackwood FM",
+        "name": "Blackwood FM",
         "url": "http://server-24.stream-server.nl:8326/stream"
     },
     {
-        "name": "(#1 - 524/500000) ROCK ANTENNE Hamburg",
+        "name": "ROCK ANTENNE Hamburg",
         "url": "http://stream.antenne.de:80/rockantenne-hamburg"
     },
     {
-        "name": "(#1 - 454/500000) ROCK ANTENNE Heavy Metal (Germany)",
+        "name": "ROCK ANTENNE Heavy Metal (Germany)",
         "url": "http://stream.antenne.de:80/heavy-metal"
     },
     {
-        "name": "(#1 - 187/999) Soul Cafe Radio",
+        "name": "Soul Cafe Radio",
         "url": "http://192.99.35.215:5354/stream"
     },
     {
-        "name": "(#1 - 2/1500) PARTY VIBE RADIO :  COUNTRY",
+        "name": "PARTY VIBE RADIO :  COUNTRY",
         "url": "http://94.130.242.5:8020/stream3"
     },
     {
-        "name": "(#1 - 70/500) Rock Melodic Radio - AOR MELODIC ROCK HARD ROCK",
+        "name": "Rock Melodic Radio - AOR MELODIC ROCK HARD ROCK",
         "url": "https://i4.streams.ovh:8124/stream"
     },
     {
@@ -612,7 +562,7 @@
         "url": "http://xradio.zone:9420/stream"
     },
     {
-        "name": "(#1 - 10/1000) Skunk Radio Live",
+        "name": "Skunk Radio Live",
         "url": "http://s6.voscast.com:7944"
     },
     {
@@ -626,10 +576,6 @@
     {
         "name": "altmetal",
         "url": "http://79.120.77.11:8004/altmetal"
-    },
-    {
-        "name": "------------  Oldskool ------------",
-        "url": "C:\\Users\\User\\Desktop\\\\Radio Caprice:----------- Oldskool ------------"
     },
     {
         "name": "Centreforce Radio",
@@ -649,15 +595,11 @@
     },
     {
         "name": "Dance Wave Retro!",
-        "url": "https://retro.dancewave.online/retrodance.flac.ogg.m3u"
+        "url": "http://retro.dancewave.online/retrodance.flac.ogg"
     },
     {
         "name": "JB Radio-2 _ Rock and Blues",
         "url": "https://maggie.torontocast.com:8076/flac"
-    },
-    {
-        "name": "Scarlet - Independent Love Song - 1994",
-        "url": "http://114.23.160.66:8000/;"
     },
     {
         "name": "SuperStereo 3 _ Disco music, pop and dance",
@@ -668,7 +610,7 @@
         "url": "https://frequence3.net-radio.fr/frequence3urban.flac"
     },
     {
-        "name": "(#1 - 9/1000) Radio Arremesso Novo",
+        "name": "Radio Arremesso Novo",
         "url": "http://94.23.1.151:8001/"
     },
     {
@@ -704,10 +646,6 @@
         "url": "http://mscp4.live-streams.nl:8140/flac.ogg"
     },
     {
-        "name": "BAREFOOT IANO - serious situation",
-        "url": "http://stream.sing-sing-bis.org:8000/singsingFlac"
-    },
-    {
         "name": "SuperStereo 1 _ 80s music",
         "url": "http://198.204.228.202:8160/flac"
     },
@@ -736,10 +674,6 @@
         "url": "http://198.204.228.202:8157/flac"
     },
     {
-        "name": "------------  Classical ------------",
-        "url": "C:\\Users\\User\\Desktop\\\\Radio Caprice:----------- Classical ------------"
-    },
-    {
         "name": "Mother Earth Radio",
         "url": "http://server9.streamserver24.com:18900/motherearth"
     },
@@ -754,10 +688,6 @@
     {
         "name": "Chill Out Zone Plus _ Chilled Out Dance",
         "url": "http://chillout.zone/chillout_plus"
-    },
-    {
-        "name": "SuperStereo 6 _ Instrumental, great orchestrations",
-        "url": "http://198.204.228.202:8157/flac6"
     },
     {
         "name": "PARTY VIBE RADIO : ELECTRO1",
@@ -806,14 +736,6 @@
     {
         "name": "Czech Radio CRo Jazz _ Jazz",
         "url": "http://amp.cesnet.cz:8000/cro-jazz.flac"
-    },
-    {
-        "name": "Chopin, Frederic - Grande Valse brillante in E flat major op. 18 KK 237-245",
-        "url": "http://mediaserv30.live-streams.nl:8088/live"
-    },
-    {
-        "name": "fm_energy_by0",
-        "url": "https://strm.yandex.ru/kal/fm_energy_by/fm_energy_by0.m3u8"
     },
     {
         "name": "Joy HitsOGG/Vorbis (500 kbps)",

@@ -41,7 +41,7 @@ pio run -e esp32-s3-devkitc-1 -t uploadfs
 - `3.3V` — `VCC` (или `5V`, если модуль поддерживает питание 5V)
 - `GND` — земля
 
-Адрес OLED: `0x3C`.
+Адрес OLED: `0x3C`. либо 
 
 > В `src/main.cpp` используется `U8G2_SSD1306_128X64_NONAME_F_HW_I2C`.
 
@@ -59,8 +59,8 @@ pio run -e esp32-s3-devkitc-1 -t uploadfs
 
 - `GPIO4` → `BCLK` 
 - `GPIO5` → `LR` (LRCK / WS)
-- `GPIO6` → `SD` / `5D` (DATA)
-- `не подключаем` → `MCLK`
+- `GPIO6` → `SD` / `DIN` (DATA)
+- `не подключаем` → `MCLK` (`SCK`)
 - `GND` → `G`
 - `3V3` → `3V3`
 
